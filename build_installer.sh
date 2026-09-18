@@ -411,11 +411,20 @@ bundle_initrd() {
 	extract_initrd
 
 	# Remove packages to shrink the initrd (Wi-Fi drivers are irrelevant
-	# during a recovery/install boot and consume several MiB).
-	[[ ${#OPENWRT_REMOVE_PACKAGES[@]} -gt 0 ]] && \
+	# during a recovery/install boot and consume several MiB). Only packages
+	# actually present are removed: the list names alternatives such as the
+	# basic and full wpad, and apk del fails on a name it cannot find.
+	local installed remove=()
+	installed="$("${APK}" --no-logfile --root "${WORKDIR}/initrd" info 2>/dev/null)"
+	for pkg in "${OPENWRT_REMOVE_PACKAGES[@]}"; do
+		if grep -qx "${pkg}" <<< "${installed}"; then
+			remove+=("${pkg}")
+		fi
+	done
+	[[ ${#remove[@]} -gt 0 ]] && \
 		IPKG_NO_SCRIPT=1 IPKG_INSTROOT="${WORKDIR}/initrd" \
 		"${APK}" --no-scripts --no-logfile --root "${WORKDIR}/initrd" \
-		del "${OPENWRT_REMOVE_PACKAGES[@]}"
+		del "${remove[@]}"
 
 	# Refresh the APK index inside the initrd so subsequent add operations
 	# resolve the correct package versions from the feed.
@@ -520,7 +529,7 @@ ubi_installer() {
 	# Remove Wi-Fi firmware and unneeded daemons from both images — the
 	# radios are not used during installation or recovery, and omitting
 	# these saves ~10 MiB of initrd space.
-	OPENWRT_REMOVE_PACKAGES=(kmod-mt7915e kmod-mt7986-firmware mt7986-wo-firmware kmod-mt76-connac kmod-mt76-core odhcp6c odhcpd-ipv6only ppp ppp-mod-pppoe wpad-basic-mbedtls)
+	OPENWRT_REMOVE_PACKAGES=(kmod-mt7915e kmod-mt7986-firmware mt7986-wo-firmware kmod-mt76-connac kmod-mt76-core odhcp6c odhcpd-ipv6only ppp ppp-mod-pppoe wpad-basic-mbedtls wpad-mbedtls)
 
 	# No extra packages needed in both images beyond what's already in the
 	# initramfs; left as an explicit empty array for future extension.
