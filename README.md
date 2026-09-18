@@ -71,9 +71,20 @@ The installer script will fetch and verify the signature on `sha256sums` before 
 
 4. Open browser and visit http://192.168.1.1
 
-5. Flash `openwrt-[version]-mediatek-filogic-tplink_archer-ax80-v1-ubi-initramfs-recovery-installer.itb` via sysupgrade.
+5. Prepare and stage the Wi-Fi calibration data. Connect to your device via SSH and run these commands to build a calibration blob from your device's stored EEPROM and MAC address:
 
-6. Once OpenWrt initramfs system comes up, do sysupgrade using
+   ```shell
+   dd if=/dev/zero bs=32768 count=1 | tr '\000' '\377' > /tmp/factory.bin
+   dd if=/tmp/tp_data/MT7986_EEPROM.bin of=/tmp/factory.bin conv=notrunc
+   cat /tmp/tp_data/default-mac >> /tmp/factory.bin
+   mtd write /tmp/factory.bin userconfig
+   ```
+
+   This builds the calibration blob from your device's own data: the Wi-Fi EEPROM at offset 0 and the MAC address at offset 0x8000. It is stored in the `userconfig` partition, which the conversion will discard anyway. The installer will refuse to proceed if it cannot find and validate this blob, so if you skip this step it will abort rather than destroy your calibration data. Before proceeding, make sure you also keep an independent backup of `/tmp/tp_data` off the device.
+
+6. Flash `openwrt-[version]-mediatek-filogic-tplink_archer-ax80-v1-ubi-initramfs-recovery-installer.itb` via sysupgrade.
+
+7. Once OpenWrt initramfs system comes up, do sysupgrade using
    `openwrt-[version]-mediatek-filogic-tplink_archer-ax80-v1-ubi-squashfs-sysupgrade.itb`
 
 ## Backup stock/vendor bootchain

@@ -95,39 +95,37 @@ ubi_mknod() {
 	mknod "/dev/$dev" c $MAJOR $MINOR
 }
 
-# Locate the Wi-Fi EEPROM (factory) data on a raw MTD device by scanning for
-# a known magic value. The EEPROM may not start at a fixed offset due to
-# vendor-specific partition layouts, so we scan up to 4 erase blocks from the
-# expected starting offset. The found block is extracted to /tmp/factory for
-# later storage in a dedicated UBI volume.
+# The preparation step described in the README stores a prepared factory.bin
+# in the stock userconfig partition at flash offset 0x6700000. By the time the
+# installer runs, the partition map is already the target one, so that region
+# sits inside mtd1 (which begins at 0x100000) at the offset below.
+FACTORY_STASH_OFFSET=$((0x6600000))
+
+# Recover that blob and sanity-check it. Refusing to continue here is the whole
+# point: formatting without valid calibration data loses it irrecoverably.
 install_get_factory() {
 	local mtddev="$1"
 	local ebs=$(cat /sys/class/mtd/$(basename $mtddev)/erasesize)
-	local assertm="$3"
-	local init_off="$2"
-	local off=$init_off
-	local skip="$((init_off / ebs))"
-	local found
-	local magic
+	local skip=$((FACTORY_STASH_OFFSET / ebs))
+	local magic mac
 
-	while [ $((off)) -lt $((init_off + 4 * ebs)) ]; do
-		magic="$(hexdump -v -s $off -n 2 -e '"%02x"' $mtddev)"
-		if [ "$magic" = "$assertm" ]; then
-			found=1
-			break
-		fi
-		off=$((off + ebs))
-		skip=$((skip + 1))
-	done
+	dd if=$mtddev bs=$ebs skip=$skip count=1 of=/tmp/factory 2>/dev/null
 
-	if [ "$found" != "1" ]; then
-		log "factory partition not found on raw flash offset"
+	magic="$(hexdump -v -n 2 -e '"%02x"' /tmp/factory)"
+	if [ "$magic" != "7986" ]; then
+		log "no EEPROM magic at the stash offset (read '${magic}')"
 		return 1
 	fi
 
-	log "found factory partition at offset $(printf %08x $((off)))"
+	mac="$(hexdump -v -s 32768 -n 6 -e '"%02x"' /tmp/factory)"
+	case "$mac" in
+	ffffffffffff|000000000000|"")
+		log "no MAC address at offset 0x8000 of the stash"
+		return 1
+		;;
+	esac
 
-	dd if=$mtddev bs=$ebs skip=$skip count=1 of=/tmp/factory
+	log "recovered factory data from the stash, MAC $mac"
 }
 
 # Back up raw MTD regions before we erase anything. These are preserved in the
@@ -193,7 +191,7 @@ fi
 
 # Extract Wi-Fi calibration data before erasing mtd1. Loss of this data
 # requires physical access to restore and will break wireless permanently.
-install_get_factory /dev/mtd1 0x0 "7986" || trigger_crash "cannot find Wi-Fi EEPROM data"
+install_get_factory /dev/mtd1 || trigger_crash "factory data not found - was the preparation step run?"
 
 # BL2 is written at the start of the raw bl2 partition.
 for bl2start in 0x0 ; do
