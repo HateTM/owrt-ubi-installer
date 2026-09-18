@@ -64,6 +64,7 @@ SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct -C "${INSTALLERDIR}")
 
 # Global state threaded between unfit_image / refit_image / bundle_initrd.
 DTC=        # path to dtc found inside the extracted IB kernel build dir
+IB_TARGET_DIR=  # staging_dir/target-* of the extracted IB (naming depends on toolchain)
 FILEBASE=   # basename of the .itb being worked on (no extension)
 WORKDIR=    # ephemeral temp directory for the current image being built
 ITSFILE=    # path to the .its (DTS source) dumped from the current .itb
@@ -126,9 +127,20 @@ prepare_openwrt_ib() {
 	# directly in OPENWRT_DIR regardless of the tarball's internal prefix.
 	tar -xf "${INSTALLERDIR}/dl/${OPENWRT_IB}" -C "${OPENWRT_DIR}" --strip-components=1
 
+	# The per-target directory is named after the CPU type for a self-built
+	# toolchain (target-aarch64_cortex-a53_musl) but after the GNU triplet
+	# for an external one (target-aarch64-openwrt-linux-musl_musl), so match
+	# it with a glob instead of hardcoding either spelling.
+	IB_TARGET_DIR="$(ls -1d "${OPENWRT_DIR}/staging_dir/target-"*"/image" | head -n1)"
+	IB_TARGET_DIR="${IB_TARGET_DIR%/image}"
+	[ -d "$IB_TARGET_DIR" ] || {
+		echo "can't find target staging directory in OpenWrt IB"
+		exit 1
+	}
+
 	# Locate dtc that was built as part of the kernel in the IB.  We need
 	# exactly the version that matches the kernel tree to avoid dtb ABI skew.
-	DTC="$(ls -1 "${OPENWRT_DIR}/build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/linux-"*"/scripts/dtc/dtc")"
+	DTC="$(ls -1 "${OPENWRT_DIR}/build_dir/target-"*"/linux-mediatek_filogic/linux-"*"/scripts/dtc/dtc" | head -n1)"
 	[ -x "$DTC" ] || {
 		echo "can't find dtc executable in OpenWrt IB"
 		exit 1
@@ -530,8 +542,8 @@ ubi_installer() {
 	#   fip  — U-Boot + ATF packaged as a Trusted Firmware FIP image
 	#   recovery .itb — the image built in step 1
 	bundle_initrd installer "${INSTALLERDIR}/dl/${OPENWRT_INITRD}" \
-		"${OPENWRT_DIR}/staging_dir/target-aarch64_cortex-a53_musl/image/${PRELOADER}" \
-		"${OPENWRT_DIR}/staging_dir/target-aarch64_cortex-a53_musl/image/mt7986_${BOARD_NAME}-u-boot.fip" \
+		"${IB_TARGET_DIR}/image/${PRELOADER}" \
+		"${IB_TARGET_DIR}/image/mt7986_${BOARD_NAME}-u-boot.fip" \
 		"${DESTDIR}/${FILEBASE}.itb"
 
 	mv "${WORKDIR}/${FILEBASE}-installer"* "${DESTDIR}"
