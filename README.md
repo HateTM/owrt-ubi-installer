@@ -44,7 +44,7 @@ To build the installer and publish it for others to use:
 
 3. Sign the manifest with your GPG key:
    ```shell
-   gpg --detach-sign --armor -u 0xF1BFCF81F2FEC487 sha256sums
+   gpg --detach-sign --armor -u 0xE45257FFB6039696 sha256sums
    ```
    This produces `sha256sums.asc`.
 
@@ -55,7 +55,7 @@ To build the installer and publish it for others to use:
 
 5. Publish your signing key to a public keyserver so others can verify the signature:
    ```shell
-   gpg --send-keys 0xF1BFCF81F2FEC487
+   gpg --send-keys 0xE45257FFB6039696
    ```
 
 The installer script will fetch and verify the signature on `sha256sums` before using any of the checksums, ensuring that only releases signed with this key are trusted.

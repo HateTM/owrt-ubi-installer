@@ -31,7 +31,7 @@ OPENWRT_RELEASE="25.12.5"
 DESTDIR="$PWD"
 
 # PGP key ID used to sign the images this installer downloads.
-INSTALLER_PGP="0xF1BFCF81F2FEC487"
+INSTALLER_PGP="0xE45257FFB6039696"
 KEYSERVER="keyserver.ubuntu.com"
 
 # Absolute path to the directory containing this script; lets us locate
