@@ -19,10 +19,10 @@ set -o errexit   # abort on any non-zero exit status
 set -o nounset   # treat unset variables as errors
 set -o pipefail  # propagate failures through pipes
 
-BOARD_NAME="comfast_cf-wr632ax-ubi"
+BOARD_NAME="tplink_archer-ax80-v1-ubi"
 
 # Name of the BL2 bootloader file to embed in the installer image.
-PRELOADER="mt7981-spim-nand-ubi-ddr3-1866-bl2.img" 
+PRELOADER="mt7986-spim-nand-ubi-ddr3-bl2.img"
 
 # OpenWrt release to target for the installer build; must match the version used to build the IB and the .itb images.
 OPENWRT_RELEASE="25.12.5"
@@ -33,8 +33,6 @@ DESTDIR="$PWD"
 # PGP key ID used by the OpenWrt project to sign release artifacts.
 OPENWRT_PGP="0x1D53D1877742E911"
 KEYSERVER="keyserver.ubuntu.com"
-# PGP key ID used by andros-ua
-ANDROS_UA_PGP="0x5326B6B2DC1CC51E"
 
 # Absolute path to the directory containing this script; lets us locate
 # sibling files regardless of where the caller invoked us from.
@@ -96,20 +94,19 @@ prepare_openwrt_ib() {
 	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $OPENWRT_PGP 1>/dev/null 2>/dev/null || gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --keyserver ${KEYSERVER}	--recv-key $OPENWRT_PGP
 	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $OPENWRT_PGP 1>/dev/null 2>/dev/null || exit 0
 
-	# Add andros-ua key while using custom images
-	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $ANDROS_UA_PGP 1>/dev/null 2>/dev/null || gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --keyserver ${KEYSERVER}	--recv-key $ANDROS_UA_PGP
-	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $ANDROS_UA_PGP 1>/dev/null 2>/dev/null || exit 0
-
 	# Always re-fetch the checksum manifest.
 	rm -f "sha256sums.asc" "sha256sums"
-	wget "${OPENWRT_TARGET}/sha256sums.asc"
 	wget "${OPENWRT_TARGET}/sha256sums"
-	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --verify sha256sums.asc sha256sums || exit 1
 
 	# Tear down the temp-keyring trap now that we're done with GPG.
 	trap - EXIT
 	rm -rf -- "${GNUPGHOME}"
 	export -n GNUPGHOME
+
+	# NOTE: artifacts are verified by sha256 only. They are self-built images for a
+	# device that is not in an official OpenWrt release yet, so there is no OpenWrt
+	# signature to check. Generate a signing key and re-add gpg verification here
+	# before publishing this installer for wider use.
 
 	# Validate any previously downloaded blobs; remove stale ones so wget -c
 	# will re-download rather than silently use a corrupt file.
@@ -459,7 +456,7 @@ bundle_initrd() {
 			EXTERNAL=
 			STATIC=
 			# Rewrite the kernel load/entry address to the correct DRAM
-			# location for the mt7981's DDR3 memory map.
+			# location for the mt7986's DDR3 memory map.
 			sed -i 's/<0x46000000>/<0x48000000>/' "${ITSFILE}"
 			refit_image 128k "$imgtype"
 			;;
@@ -487,7 +484,9 @@ bundle_initrd() {
 #             flashes the sysupgrade image.
 # ---------------------------------------------------------------------------
 ubi_installer() {
-	OPENWRT_TARGET="https://dlowrt.kuiukov.com/releases/${OPENWRT_RELEASE}/targets/mediatek/filogic"
+	# Images are self-built and published as GitHub release assets. This device is not
+	# part of any official OpenWrt release yet, so we host artifacts in this project's fork.
+	OPENWRT_TARGET="https://github.com/HateTM/owrt-ubi-installer/releases/download/${OPENWRT_RELEASE}"
 	OPENWRT_IB="openwrt-imagebuilder-${OPENWRT_RELEASE}-mediatek-filogic.Linux-x86_64.tar.zst"
 	OPENWRT_INITRD="openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-initramfs-recovery.itb"
 	OPENWRT_SYSUPGRADE="openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-squashfs-sysupgrade.itb"
@@ -498,7 +497,7 @@ ubi_installer() {
 	# Remove Wi-Fi firmware and unneeded daemons from both images — the
 	# radios are not used during installation or recovery, and omitting
 	# these saves ~10 MiB of initrd space.
-	OPENWRT_REMOVE_PACKAGES=(kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-mt76-connac kmod-mt76-core odhcp6c odhcpd-ipv6only ppp ppp-mod-pppoe wpad-basic-mbedtls)
+	OPENWRT_REMOVE_PACKAGES=(kmod-mt7915e kmod-mt7986-firmware mt7986-wo-firmware kmod-mt76-connac kmod-mt76-core odhcp6c odhcpd-ipv6only ppp ppp-mod-pppoe wpad-basic-mbedtls)
 
 	# No extra packages needed in both images beyond what's already in the
 	# initramfs; left as an explicit empty array for future extension.
@@ -531,7 +530,7 @@ ubi_installer() {
 	#   recovery .itb — the image built in step 1
 	bundle_initrd installer "${INSTALLERDIR}/dl/${OPENWRT_INITRD}" \
 		"${OPENWRT_DIR}/staging_dir/target-aarch64_cortex-a53_musl/image/${PRELOADER}" \
-		"${OPENWRT_DIR}/staging_dir/target-aarch64_cortex-a53_musl/image/mt7981_${BOARD_NAME}-u-boot.fip" \
+		"${OPENWRT_DIR}/staging_dir/target-aarch64_cortex-a53_musl/image/mt7986_${BOARD_NAME}-u-boot.fip" \
 		"${DESTDIR}/${FILEBASE}.itb"
 
 	mv "${WORKDIR}/${FILEBASE}-installer"* "${DESTDIR}"

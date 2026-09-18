@@ -6,9 +6,9 @@ BOARD_NAME=$(cat /proc/device-tree/compatible | tr '\0' '\n' | head -1 | tr ',' 
 
 # LED definitions for the installer initramfs.
 # These are used to signal installer status and errors to the user via the board's LED(s).
-LED_BLUE="blue:status"
-LED_GREEN="green:status"
-LED_RED="red:status"
+LED_BLUE="B"
+LED_GREEN="G"
+LED_RED="R"
 
 led_reset() {
 	echo none > /sys/class/leds/${LED_BLUE}/trigger
@@ -68,8 +68,8 @@ log "OpenWrt UBI installer (${BOARD_NAME})"
 echo
 
 INSTALLER_DIR="/installer"
-PRELOADER="$(ls -1 $INSTALLER_DIR/mt7981-*-bl2.img)"
-FIP="$INSTALLER_DIR/mt7981_${BOARD_NAME}-u-boot.fip"
+PRELOADER="$(ls -1 $INSTALLER_DIR/mt7986-*-bl2.img)"
+FIP="$INSTALLER_DIR/mt7986_${BOARD_NAME}-u-boot.fip"
 # Use ls to resolve the wildcard at runtime so the script does not need to
 # hardcode the OpenWrt build version string in the filename.
 RECOVERY="$(ls -1 $INSTALLER_DIR/openwrt-*mediatek-filogic-${BOARD_NAME}-initramfs-recovery.itb)"
@@ -172,18 +172,20 @@ install_prepare_ubi() {
 	[ "$HAS_ENV" = "1" ] && ubimkvol /dev/ubi0 -n 2 -s 126976 -N ubootenv && ubimkvol /dev/ubi0 -n 3 -s 126976 -N ubootenv2
 }
 
-# mtd0 = BL2 (full partition)
-# mtd1 layout at 128k erase blocks:
-#   blocks 0-3    (0x000000-0x07ffff): U-Boot environment
-#   blocks 4-19   (0x080000-0x17ffff): Factory / Wi-Fi EEPROM
-#   blocks 20-35  (0x180000-0x27ffff): FIP (BL31 + U-Boot)
+# The installer runs with the new all-in-UBI device tree, so the partition map
+# it sees is already the target one, laid over the old on-flash contents:
+#   mtd0 = bl2 (0x000000-0x0fffff), unchanged by the conversion
+#   mtd1 = ubi (0x100000-0x7ffffff), the region being converted
+# Coming from the previous layout, mtd1 starts with the old raw factory
+# partition in its first erase block, followed by the old UBI content.
 if [ "$HAS_BACKUP" = "1" ]; then
-	log "backing up BL2, Factory, FIP from mtd0, mtd1 before erase"
+	log "backing up bl2 and factory from mtd0, mtd1 before erase"
 	mkdir -p /tmp/boot_backup
-	install_prepare_mtd_backup 0 BL2
-	install_prepare_mtd_backup 1 u-boot-env 4
-	install_prepare_mtd_backup 1 Factory 16 4
-	install_prepare_mtd_backup 1 FIP 16 20
+	install_prepare_mtd_backup 0 bl2
+	# 8 erase blocks x 128 KiB = the full 1 MiB factory region of the previous
+	# layout; the calibration data itself lives in the first block, but the
+	# whole region is kept so the device can be restored to stock.
+	install_prepare_mtd_backup 1 factory 8
 
 	# Create a compressed archive of the backup files and remove the temporary directory.
 	tar czvf /tmp/boot_backup.tar.gz -C /tmp boot_backup && rm -rf /tmp/boot_backup
@@ -191,11 +193,10 @@ fi
 
 # Extract Wi-Fi calibration data before erasing mtd1. Loss of this data
 # requires physical access to restore and will break wireless permanently.
-install_get_factory /dev/mtd1 0x80000 "7981" || trigger_crash "cannot find Wi-Fi EEPROM data"
+install_get_factory /dev/mtd1 0x0 "7986" || trigger_crash "cannot find Wi-Fi EEPROM data"
 
-# BL2 is written to two offsets for redundancy; the SoC ROM tries the second
-# copy if the first fails its integrity check.
-for bl2start in 0x0 0x80000 ; do
+# BL2 is written at the start of the raw bl2 partition.
+for bl2start in 0x0 ; do
 	log "write bl2 at offset $bl2start"
 	mtd -p $bl2start write $PRELOADER /dev/mtd0 || \
 	log "bl2 write to mtd0 at offset $bl2start failed"
