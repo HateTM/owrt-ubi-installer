@@ -66,7 +66,7 @@ UNFIT="${INSTALLERDIR}/unfit"
 
 # Bake the last git commit timestamp into generated images so that builds are
 # reproducible: identical source trees produce byte-for-byte identical output.
-SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct -C "${INSTALLERDIR}")
+SOURCE_DATE_EPOCH=$(git -C "${INSTALLERDIR}" log -1 --pretty=%ct)
 
 # Global state threaded between unfit_image / refit_image / bundle_initrd.
 DTC=        # path to dtc found inside the extracted IB kernel build dir
