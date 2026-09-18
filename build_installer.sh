@@ -24,8 +24,8 @@ BOARD_NAME="tplink_archer-ax80-v1-ubi"
 # Name of the BL2 bootloader file to embed in the installer image.
 PRELOADER="mt7986-spim-nand-ubi-ddr3-bl2.img"
 
-# OpenWrt release to target for the installer build; must match the version used to build the IB and the .itb images.
-OPENWRT_RELEASE="25.12.5"
+# GitHub release tag containing the prebuilt images (IB, sysupgrade, and recovery .itb).
+OPENWRT_RELEASE="r36350-archer-ax80-v1"
 
 # Output directory — caller's working directory, not the script's own directory.
 DESTDIR="$PWD"

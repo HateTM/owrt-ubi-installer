@@ -13,9 +13,10 @@ on:
         type: boolean
 
   push:
-    # Triggers on every tag starting with v
+    # Release tags: v* from upstream, r* for revision-based builds
     tags:
       - v*
+      - r*
 
 jobs:
   build:
@@ -38,7 +39,7 @@ jobs:
           path: "*.itb"
 
   release:
-    if: inputs.no_release == '0'
+    if: github.event_name == 'push' || inputs.no_release == false
     needs: build
     runs-on: ubuntu-latest
     env:
