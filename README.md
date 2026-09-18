@@ -29,6 +29,37 @@ You'll need the below to use the script to generate the installer image:
 
 **If you are not interested in building yourself**, the pre-built files are available [here](https://github.com/HateTM/owrt-ubi-installer/releases).
 
+## Building and Publishing a Release
+
+To build the installer and publish it for others to use:
+
+1. Build the OpenWrt images (recovery, sysupgrade, and Image Builder) for the `tplink_archer-ax80-v1-ubi` board target.
+
+2. Generate a checksum manifest covering the three image artifacts:
+   ```shell
+   sha256sum openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-initramfs-recovery.itb \
+             openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-squashfs-sysupgrade.itb \
+             openwrt-imagebuilder-${OPENWRT_RELEASE}-mediatek-filogic.Linux-x86_64.tar.zst > sha256sums
+   ```
+
+3. Sign the manifest with your GPG key:
+   ```shell
+   gpg --detach-sign --armor -u 0xF1BFCF81F2FEC487 sha256sums
+   ```
+   This produces `sha256sums.asc`.
+
+4. Create a GitHub release with a tag matching the `OPENWRT_RELEASE` value in `build_installer.sh` (e.g., `25.12.5`), and upload the following assets:
+   - `sha256sums`
+   - `sha256sums.asc`
+   - All three images from step 1
+
+5. Publish your signing key to a public keyserver so others can verify the signature:
+   ```shell
+   gpg --send-keys 0xF1BFCF81F2FEC487
+   ```
+
+The installer script will fetch and verify the signature on `sha256sums` before using any of the checksums, ensuring that only releases signed with this key are trusted.
+
 ## Installing OpenWrt all-in-UBI
 
 1. Ensure your router is running the latest generic OpenWrt firmware. Upgrade it if necessary.

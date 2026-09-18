@@ -30,8 +30,8 @@ OPENWRT_RELEASE="25.12.5"
 # Output directory — caller's working directory, not the script's own directory.
 DESTDIR="$PWD"
 
-# PGP key ID used by the OpenWrt project to sign release artifacts.
-OPENWRT_PGP="0x1D53D1877742E911"
+# PGP key ID used to sign the images this installer downloads.
+INSTALLER_PGP="0xF1BFCF81F2FEC487"
 KEYSERVER="keyserver.ubuntu.com"
 
 # Absolute path to the directory containing this script; lets us locate
@@ -89,24 +89,23 @@ prepare_openwrt_ib() {
 	mkdir -p "${INSTALLERDIR}/dl"
 	cd "${INSTALLERDIR}/dl"
 
-	# Import the OpenWrt release key only if it isn't already in our
+	# Import the image signing key only if it isn't already in our
 	# temporary keyring (avoids a network round-trip on warm runs).
-	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $OPENWRT_PGP 1>/dev/null 2>/dev/null || gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --keyserver ${KEYSERVER}	--recv-key $OPENWRT_PGP
-	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $OPENWRT_PGP 1>/dev/null 2>/dev/null || exit 0
+	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $INSTALLER_PGP 1>/dev/null 2>/dev/null || gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --keyserver ${KEYSERVER}	--recv-key $INSTALLER_PGP
+	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --list-key $INSTALLER_PGP 1>/dev/null 2>/dev/null || exit 0
 
-	# Always re-fetch the checksum manifest.
+	# Always re-fetch the checksum manifest and its signature.
 	rm -f "sha256sums.asc" "sha256sums"
+	wget "${OPENWRT_TARGET}/sha256sums.asc"
 	wget "${OPENWRT_TARGET}/sha256sums"
+
+	# Verify the manifest signature before trusting any checksum in it.
+	gpg --no-default-keyring --keyring "${INSTALLERDIR}/openwrt-keyring" --verify sha256sums.asc sha256sums || exit 1
 
 	# Tear down the temp-keyring trap now that we're done with GPG.
 	trap - EXIT
 	rm -rf -- "${GNUPGHOME}"
 	export -n GNUPGHOME
-
-	# NOTE: artifacts are verified by sha256 only. They are self-built images for a
-	# device that is not in an official OpenWrt release yet, so there is no OpenWrt
-	# signature to check. Generate a signing key and re-add gpg verification here
-	# before publishing this installer for wider use.
 
 	# Validate any previously downloaded blobs; remove stale ones so wget -c
 	# will re-download rather than silently use a corrupt file.
