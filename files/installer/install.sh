@@ -109,10 +109,14 @@ FACTORY_OFFSETS="0x0 0x6600000"
 factory_blob_valid() {
 	local magic mac
 
+	# The chip ID is stored as a little-endian u16 (bytes 86 79 on flash),
+	# which hexdump's default 2-byte unit prints as 7986.
 	magic="$(hexdump -v -n 2 -e '"%02x"' /tmp/factory 2>/dev/null)"
 	[ "$magic" = "7986" ] || return 1
 
-	mac="$(hexdump -v -s 32768 -n 6 -e '"%02x"' /tmp/factory 2>/dev/null)"
+	# Print the MAC byte by byte; with the default unit hexdump would swap
+	# every pair and the logged address would not match the device.
+	mac="$(hexdump -v -s 32768 -n 6 -e '6/1 "%02x"' /tmp/factory 2>/dev/null)"
 	case "$mac" in
 	ffffffffffff|000000000000|"")
 		return 1
