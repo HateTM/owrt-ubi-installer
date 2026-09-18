@@ -486,8 +486,8 @@ bundle_initrd() {
 # ---------------------------------------------------------------------------
 ubi_installer() {
 	# Images are self-built and published as GitHub release assets. This device is not
-	# part of any official OpenWrt release yet, so we host artifacts in this project's fork.
-	OPENWRT_TARGET="https://github.com/HateTM/owrt-ubi-installer/releases/download/${OPENWRT_RELEASE}"
+	# part of any official OpenWrt release yet, so we host artifacts in the openwrt fork that builds them.
+	OPENWRT_TARGET="https://github.com/HateTM/tpl_ax80_ubi/releases/download/${OPENWRT_RELEASE}"
 	OPENWRT_IB="openwrt-imagebuilder-${OPENWRT_RELEASE}-mediatek-filogic.Linux-x86_64.tar.zst"
 	OPENWRT_INITRD="openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-initramfs-recovery.itb"
 	OPENWRT_SYSUPGRADE="openwrt-${OPENWRT_RELEASE}-mediatek-filogic-${BOARD_NAME}-squashfs-sysupgrade.itb"
