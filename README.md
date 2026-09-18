@@ -55,8 +55,9 @@ To build the installer and publish it for others to use:
 
 5. Publish your signing key to a public keyserver so others can verify the signature:
    ```shell
-   gpg --send-keys 0xE45257FFB6039696
+   gpg --keyserver keys.openpgp.org --send-keys 0xE45257FFB6039696
    ```
+   Note: Your key's email address must be verified with keys.openpgp.org before the key is served with its user ID.
 
 The installer script will fetch and verify the signature on `sha256sums` before using any of the checksums, ensuring that only releases signed with this key are trusted.
 

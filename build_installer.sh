@@ -32,7 +32,9 @@ DESTDIR="$PWD"
 
 # PGP key ID used to sign the images this installer downloads.
 INSTALLER_PGP="0xE45257FFB6039696"
-KEYSERVER="keyserver.ubuntu.com"
+# keyserver.ubuntu.com silently ignores Ed25519 keys, so the modern
+# keys.openpgp.org is used instead.
+KEYSERVER="keys.openpgp.org"
 
 # Absolute path to the directory containing this script; lets us locate
 # sibling files regardless of where the caller invoked us from.
