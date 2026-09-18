@@ -30,6 +30,12 @@ OPENWRT_RELEASE="r36350-archer-ax80-v1"
 # Output directory — caller's working directory, not the script's own directory.
 DESTDIR="$PWD"
 
+# Optional directory whose contents are copied over the recovery initrd
+# (and thereby into the recovery embedded in the installer), e.g. to give
+# the recovery system the network configuration of the device it will be
+# installed on instead of the OpenWrt defaults.
+RECOVERY_FILES_DIR="${RECOVERY_FILES_DIR:-}"
+
 # PGP key ID used to sign the images this installer downloads.
 INSTALLER_PGP="0xE45257FFB6039696"
 # keyserver.ubuntu.com silently ignores Ed25519 keys, so the modern
@@ -434,6 +440,10 @@ bundle_initrd() {
 			IPKG_NO_SCRIPT=1 IPKG_INSTROOT="${WORKDIR}/initrd" \
 				"${APK}" --no-scripts --no-logfile --root "${WORKDIR}/initrd" \
 				add "${OPENWRT_ADD_REC_PACKAGES[@]}"
+
+			if [ -n "${RECOVERY_FILES_DIR}" ]; then
+				cp -av "${RECOVERY_FILES_DIR}/." "${WORKDIR}/initrd/"
+			fi
 			;;
 		installer)
 			# Overlay the installer scripts from the repo's files/ directory,
