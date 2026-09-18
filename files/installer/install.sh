@@ -95,37 +95,50 @@ ubi_mknod() {
 	mknod "/dev/$dev" c $MAJOR $MINOR
 }
 
-# The preparation step described in the README stores a prepared factory.bin
-# in the stock userconfig partition at flash offset 0x6700000. By the time the
-# installer runs, the partition map is already the target one, so that region
-# sits inside mtd1 (which begins at 0x100000) at the offset below.
-FACTORY_STASH_OFFSET=$((0x6600000))
+# The calibration blob can be in one of two places, depending on what the
+# device was running before. Coming from the partial-UBI layout it is the real
+# factory partition, which the target map puts at the very start of mtd1.
+# Coming from the stock layout the user stages a prepared blob into the
+# userconfig partition (flash 0x6700000), which lands further in. Both are
+# checked, and whichever validates is used.
+FACTORY_OFFSETS="0x0 0x6600000"
 
-# Recover that blob and sanity-check it. Refusing to continue here is the whole
-# point: formatting without valid calibration data loses it irrecoverably.
-install_get_factory() {
-	local mtddev="$1"
-	local ebs=$(cat /sys/class/mtd/$(basename $mtddev)/erasesize)
-	local skip=$((FACTORY_STASH_OFFSET / ebs))
+# Validate a candidate blob: it must carry the EEPROM magic and a MAC that is
+# not simply erased flash. Getting this wrong means formatting over calibration
+# data that cannot be recovered, so a failed check aborts the install.
+factory_blob_valid() {
 	local magic mac
 
-	dd if=$mtddev bs=$ebs skip=$skip count=1 of=/tmp/factory 2>/dev/null
+	magic="$(hexdump -v -n 2 -e '"%02x"' /tmp/factory 2>/dev/null)"
+	[ "$magic" = "7986" ] || return 1
 
-	magic="$(hexdump -v -n 2 -e '"%02x"' /tmp/factory)"
-	if [ "$magic" != "7986" ]; then
-		log "no EEPROM magic at the stash offset (read '${magic}')"
-		return 1
-	fi
-
-	mac="$(hexdump -v -s 32768 -n 6 -e '"%02x"' /tmp/factory)"
+	mac="$(hexdump -v -s 32768 -n 6 -e '"%02x"' /tmp/factory 2>/dev/null)"
 	case "$mac" in
 	ffffffffffff|000000000000|"")
-		log "no MAC address at offset 0x8000 of the stash"
 		return 1
 		;;
 	esac
 
-	log "recovered factory data from the stash, MAC $mac"
+	log "factory data looks good, MAC $mac"
+}
+
+install_get_factory() {
+	local mtddev="$1"
+	local ebs=$(cat /sys/class/mtd/$(basename $mtddev)/erasesize)
+	local off skip
+
+	for off in $FACTORY_OFFSETS; do
+		skip=$(( $off / ebs ))
+		log "looking for factory data at offset $(printf %08x $((off)))"
+		dd if=$mtddev bs=$ebs skip=$skip count=1 of=/tmp/factory 2>/dev/null
+
+		if factory_blob_valid; then
+			return 0
+		fi
+	done
+
+	rm -f /tmp/factory
+	return 1
 }
 
 # Back up raw MTD regions before we erase anything. These are preserved in the
